@@ -1,0 +1,21 @@
+---
+
+# - name: create cassandra cluster
+#   hosts: localhost
+#   connection: local
+#   vars:
+#     ansible_python_interpreter: /usr/bin/python
+#   roles:
+#     - cassandra
+  
+- name: configure cassandra cluster
+  hosts: "{{ cassandranode1 }}", "{{ cassandranode2 }}", "{{ cassandranode3 }}"
+  remote_user: "ubuntu"
+  become: yes
+  serial: 1
+  vars:
+    ansible_ssh_private_key_file: secrets/ssh-keys/test-cloud
+    ansible_python_interpreter: /usr/bin/python
+  roles:
+    - role: cassandra-deploy
+

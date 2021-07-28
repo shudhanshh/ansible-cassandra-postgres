@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# mounting cass disk 200GB
+echo "Partition a new disk"
+sudo parted /dev/sdc --script mklabel gpt mkpart ext4 0% 100%
+
+sleep 5
+
+echo "write a file system to the partition"
+sudo mkfs -t ext4 -L cass /dev/sdc1
+
+echo "creating dir for cass"
+sudo mkdir -p /var/lib/cassandra/
+
+echo "making entry in fstab for cass"
+sudo echo "LABEL=cass /var/lib/cassandra/ ext4 defaults,noatime 0 1" >> /etc/fstab
+
+echo "mounting disk cass"
+sudo mount /var/lib/cassandra/
+
+# mounting cass_data disk 1000GB
+echo "Partition a new disk"
+sudo parted /dev/sdd --script mklabel gpt mkpart xfspart xfs 0% 100%
+
+sleep 5
+
+echo "write a file system to the partition"
+sudo mkfs.xfs -s size=4096 -L cass_data /dev/sdd1
+
+echo "creating dir for cass data disk"
+sudo mkdir /var/lib/cassandra/data
+
+echo "making entry in fstab for cass_data"
+sudo echo "LABEL=cass_data /var/lib/cassandra/data xfs defaults,noatime 0 1" >> /etc/fstab
+
+echo "mounting disk cass_data"
+sudo mount /var/lib/cassandra/data/

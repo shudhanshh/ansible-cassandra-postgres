@@ -1,0 +1,84 @@
+---
+# tasks file for postgress_deploy
+
+- name: Wait for ssh connection for cassandra instances
+  wait_for_connection:
+    connect_timeout: '20'
+    sleep: '5'
+    delay: '15'
+    timeout: '900'
+
+- name: check if file /etc/apt/sources.list.d/pgdg.list
+  stat: 
+    path: /etc/apt/sources.list.d/pgdg.list
+  register: pg_file
+
+- name: create a file /etc/apt/sources.list.d/pgdg.list
+  file:
+    path: /etc/apt/sources.list.d/pgdg.list
+    state: touch
+    mode: u=rw,g=r,o=r
+  when: not pg_file.stat.exists
+
+- name: add line to file
+  lineinfile:
+    path: /etc/apt/sources.list.d/pgdg.list
+    line: 'deb http://apt.postgresql.org/pub/repos/apt/ stretch-pgdg main'
+
+- name: Add an apt key by id from a keyserver
+  apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc 
+    state: present
+  
+- name: apt-get update
+  apt:
+    update-cache: yes
+
+- name: Install postgresql package
+  apt:
+    pkg: ['postgresql-client', 'postgresql-9.6']
+    state: present
+  register: pg_pckg_inst
+
+- name: enable service postgresql and start
+  systemd:
+    name: postgresql
+    enabled: yes
+    state: restarted
+
+- name: Check linux server monitoring agent exists
+  stat:
+    path: /opt/site24x7/monagent
+  register: pgtwenty
+
+- name: Download 64 bit Site24x7 agent from public URL
+  get_url:
+    url: https://staticdownloads.site24x7.com/server/Site24x7_Linux_64bit.install
+    dest: /opt/Site24x7_Linux_64bit.install
+    mode: 0750
+  when: not pgtwenty.stat.exists
+
+- name : Install 64 bit Site24x7 agent in the server
+  shell: /opt/Site24x7_Linux_64bit.install -i -key={{ site24x7devicekey }} -installer=ansible
+  when: not pgtwenty.stat.exists
+
+- name: Enable service site24x7monagent 
+  service:
+    name: site24x7monagent
+    state: restarted
+  when: not pgtwenty.stat.exists
+
+- name: Ansible Template Example
+  template:
+    src: pg.sh.j2
+    dest: /tmp/pg.sh
+    mode: '0777'
+  when: pg_pckg_inst.changed
+
+- name: run script to create db and user
+  shell: sh /tmp/pg.sh
+  when: pg_pckg_inst.changed
+
+- name: delete /tmp/pg.sh
+  shell: rm -f /tmp/pg.sh
+  when: pg_pckg_inst.changed

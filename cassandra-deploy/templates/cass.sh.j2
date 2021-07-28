@@ -1,0 +1,5 @@
+#!/bin/bash -x
+
+for i in `cqlsh --execute "SELECT * FROM system_schema.keyspaces;" | awk 'FNR > 3 {print $1}' | head -n -2`; do cqlsh --execute "ALTER KEYSPACE $i WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 3 };"; done
+
+nodetool repair -full

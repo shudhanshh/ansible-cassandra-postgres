@@ -1,0 +1,11 @@
+#!/bin/bash
+
+sudo -u postgres psql -c "CREATE USER {{pg_user_name}} WITH ENCRYPTED PASSWORD '{{pg_user_password}}';"
+sudo -u postgres psql -c "CREATE DATABASE {{pg_database_name}};"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE {{pg_database_name}} TO {{pg_user_name}};"
+
+sudo su - root -c "echo listen_addresses = \'*\' >> /etc/postgresql/9.6/main/postgresql.conf"
+sudo su - root -c "echo 'host    all         all         10.0.0.0/8               md5' >> /etc/postgresql/9.6/main/pg_hba.conf"
+sudo apt upgrade -y
+
+sudo systemctl restart postgresql.service

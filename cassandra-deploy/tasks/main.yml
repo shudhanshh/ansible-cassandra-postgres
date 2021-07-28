@@ -1,0 +1,126 @@
+---
+# tasks file for cassandra-deploy
+- name: Wait for ssh connection for cassandra instances
+  wait_for_connection:
+    connect_timeout: '20'
+    sleep: '5'
+    delay: '15'
+    timeout: '900'
+
+- name: copy script to mount cass managed disks
+  template:
+    src: cass_diskmount.sh.j2
+    dest: /tmp/cass_diskmount.sh
+    mode: '0777'
+  when: action == "create"
+
+- name: run script to mount disk
+  shell: sh /tmp/cass_diskmount.sh
+  when: action == "create"
+
+- name: check if file /etc/apt/sources.list.d/cassandra.sources.list
+  stat: 
+    path: /etc/apt/sources.list.d/cassandra.sources.list
+  register: cas
+
+- name: create a file cassandra.sources.list a file
+  file:
+    path: /etc/apt/sources.list.d/cassandra.sources.list
+    state: touch
+    mode: '644'
+  when: not cas.stat.exists
+
+- name: add line to file
+  lineinfile:
+    path: /etc/apt/sources.list.d/cassandra.sources.list
+    line: 'deb http://www.apache.org/dist/cassandra/debian 311x main'
+
+- name: Add an apt key by id from a keyserver
+  apt_key:
+    url: https://www.apache.org/dist/cassandra/KEYS 
+    state: present
+  
+- name: apt-get update
+  apt:
+    update-cache: yes
+
+- name: Install openjdk-8-jdk package
+  apt:
+    name: openjdk-8-jdk
+    state: present
+
+- name: Install python package
+  apt:
+    name: python
+    state: present
+
+- name: Mask service cassandra 
+  service:
+    name: cassandra
+    masked: yes
+
+- name: Install cassandra package
+  apt:
+    name: cassandra
+    state: present
+  register: cass_pkg_install
+
+- name: Ansible delete files from /var/lib/cassandra/data/
+  find:
+    paths: /var/lib/cassandra/data/
+    patterns: '*'
+  register: files_to_delete
+  when: cass_pkg_install.changed
+
+- name: Ansible remove file from /var/lib/cassandra/data/
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ files_to_delete.files }}"
+  when: cass_pkg_install.changed
+
+- name: set configuration for 
+  template:
+    src: cassandra.yaml.j2
+    dest: /etc/cassandra/cassandra.yaml
+
+- name: enable service cassandra and ensure it is not masked
+  systemd:
+    name: cassandra
+    enabled: yes
+    masked: no
+    state: restarted
+
+- name: Check linux server monitoring agent exists
+  stat:
+    path: /opt/site24x7/monagent
+  register: casstwenty
+
+- name: Download 64 bit Site24x7 agent from public URL
+  get_url:
+    url: https://staticdownloads.site24x7.com/server/Site24x7_Linux_64bit.install
+    dest: /opt/Site24x7_Linux_64bit.install
+    mode: 0750
+  when: not casstwenty.stat.exists
+
+- name : Install 64 bit Site24x7 agent in the server
+  shell: /opt/Site24x7_Linux_64bit.install -i -key='none' -installer=ansible
+  when: not casstwenty.stat.exists
+
+- name: Enable service site24x7monagent 
+  service:
+    name: site24x7monagent
+    state: restarted
+  when: not casstwenty.stat.exists
+
+- name: copy script to configure cass db's
+  template:
+    src: cass.sh.j2
+    dest: /tmp/cass.sh
+    mode: '0777'
+  when: cass_pkg_install.changed
+
+- name: run script to create db and user
+  shell: sh /tmp/cass.sh
+  when: cass_pkg_install.changed
+
